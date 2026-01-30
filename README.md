@@ -26,25 +26,22 @@ uploads/                  # 挂载的根目录
 │   └── 11/
 └── ...
 ```
+## 🚀 快速开始
 
-## 🚀 快速开始 (Quick Start)
-
-### 1. 前置要求
-- Docker
-- Docker Compose
-
-### 2. 启动服务
+### 1. 启动服务
 
 ```bash
-# 构建并后台启动
+# 构建并启动所有服务
 docker compose up -d --build
 ```
 
-### 3. 配置说明
-主要配置位于 `uploader/index.js` (或 `server.js`) 中：
-- `PORT`: 上传服务端口 (默认 3000)
-- `AUTH_TOKEN`: 上传鉴权密码 (默认 "my-secret-password")
-- `UPLOAD_DIR`: 容器内存储路径 (默认 "/usr/share/uploads")
+### 2. 服务说明
+
+| 服务名称 | 端口 | 说明 | 默认凭证 |
+| :--- | :--- | :--- | :--- |
+| **图片访问 (CDN)** | `80` | Nginx 静态服务 | 无 |
+| **上传接口 (API)** | `3000` | POST 上传接口 | Token: `my-secret-password` |
+| **文件管理 (UI)** | `8080` | FileBrowser 管理后台 | admin / admin |
 
 ---
 
@@ -52,68 +49,51 @@ docker compose up -d --build
 
 ### 上传图片
 
-- **URL**: `http://<你的服务器IP>:3000/upload`
+- **URL**: `http://localhost:3000/upload`
 - **Method**: `POST`
 - **Content-Type**: `multipart/form-data`
 
-#### 请求参数 (Headers)
+#### 请求头 (Headers)
 
 | 参数名 | 值 | 说明 |
 | :--- | :--- | :--- |
-| Authorization | `Bearer my-secret-password` | **必填**，注意Bearer后有空格 |
+| Authorization | `Bearer my-secret-password` | **必填** (可在代码中修改) |
 
 #### 请求体 (Body)
 
 | 参数名 | 类型 | 说明 |
 | :--- | :--- | :--- |
-| **file** | File | **必填**，要上传的图片文件 |
+| **file** | File | **必填**，目标图片文件 |
 
-#### 返回示例 (Success)
+#### 返回示例
 
 ```json
 {
-    "message": "success",
-    "url": "http://localhost/2023/10/27/20231027-143001-12345.jpg",
-    "filename": "20231027-143001-12345.jpg",
-    "path": "2023/10/27/20231027-143001-12345.jpg"
+  "message": "success",
+  "url": "http://localhost/2023/10/27/xxxx.jpg",
+  "path": "2023/10/27/xxxx.jpg"
 }
 ```
 
 ---
 
-## 💻 客户端测试示例
+## 🛠️ 维护与配置
 
-你可以使用 `curl` 命令或 Postman 进行测试。
+### 数据持久化
+所有图片存储在项目根目录下的 `./data` 文件夹中。
+FileBrowser 的数据库配置存储在 `./filebrowser` 文件夹中。
+**警告**：请勿在未备份的情况下直接删除 `data` 目录。
 
-**使用 cURL 测试：**
-
+### 修改 Nginx 配置
+Nginx 配置文件位于 `./nginx/default.conf`，修改后需要重启容器：
 ```bash
-curl -X POST http://localhost:3000/upload \
-  -H "Authorization: Bearer my-secret-password" \
-  -F "file=@/Users/yourname/Desktop/test.jpg"
+docker compose restart nginx
 ```
 
-> **注意**：如果不带 Header 或 Token 错误，将返回 `403 Forbidden`。
-
----
-
-## 🛠️ 维护与排错
-
-### 查看日志
-如果你发现上传失败，可以查看 Node 服务日志：
+### 修改上传密码
+修改 `uploader/index.js` 中的 `AUTH_TOKEN` 常量，然后重建容器：
 ```bash
-docker compose logs -f uploader
-```
-
-### 访问图片
-上传成功后，通过浏览器访问 Nginx 端口（通常是 80）：
-`http://localhost/2023/10/27/xxxx.jpg`
-
-### 持久化数据
-请确保 `docker-compose.yml` 中配置了 Volumes 映射，否则重启容器后图片会丢失：
-```yaml
-volumes:
-  - ./uploads:/usr/share/uploads
+docker compose up -d --build uploader
 ```
 
 ## 📝 License
