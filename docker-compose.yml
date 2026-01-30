@@ -1,0 +1,37 @@
+version: '3'
+services:
+  # 1. 上传接口服务 (API)
+  uploader:
+    build: ./uploader
+    container_name: cdn_uploader
+    ports:
+      - "3000:3000"
+    volumes:
+      # 将宿主机的 data 目录映射给 uploader 写入
+      - ./data:/usr/share/uploads
+    restart: always
+
+  # 2. Nginx 静态服务 (CDN)
+  nginx:
+    image: nginx:alpine
+    container_name: cdn_server
+    ports:
+      - "80:80"
+    volumes:
+      # 将同一个 data 目录映射给 nginx 读取 (只读模式)
+      - ./data:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+
+  # 3. 文件管理器 (UI)
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: cdn_manager
+    ports:
+      - "8080:80"
+    volumes:
+      # 将同一个 data 目录映射给管理器进行管理
+      - ./data:/srv
+      - ./filebrowser/filebrowser.db:/database/filebrowser.db
+      - ./filebrowser/settings.json:/config/settings.json
+    restart: always
