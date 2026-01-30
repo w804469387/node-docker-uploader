@@ -1,19 +1,13 @@
 
-# 📸 Self-Hosted Image Uploader (Dockerized)
-
-这是一个基于 **Node.js (Express)** 和 **Nginx** 构建的轻量级自托管图床服务。它支持 Docker 一键部署，具备**权限验证**、**自动按日期归档**以及**文件名规范化**功能。
-
-## ✨ 功能特性 (Features)
-
-- **Docker 部署**：基于 Docker Compose，包含 Node.js 上传服务和 Nginx 静态文件服务。
-- **智能目录管理**：上传的文件会自动按 `YYYY/MM/DD` (年/月/日) 创建文件夹归档，保持目录整洁。
-- **规范化命名**：文件名自动重命名为 `时间戳-随机码.后缀`，防止重名。
-- **安全验证**：通过 `Authorization` Header 进行简单的 Token 验证，防止未授权上传。
-- **高性能访问**：使用 Nginx 直接处理静态资源请求，速度快且稳定。
-
-## 📂 目录结构 (Directory Structure)
-
-项目运行后，文件存储结构如下所示：
+# 📸 Self-Hosted CDN & Image Uploader
+这是一个基于 **Node.js**、**Nginx** 和 **FileBrowser** 构建的全功能自托管图床解决方案。
+## ✨ 系统架构
+该项目包含三个核心服务：
+1.  **Uploader (端口 3000)**: Node.js 上传服务，负责接收图片、鉴权、按日期归档。
+2.  **Nginx (端口 80)**: 高性能静态文件服务器，作为 CDN 提供图片访问。
+3.  **FileBrowser (端口 8080)**: 可视化文件管理器，用于在网页端管理/删除图片。
+## 📂 目录结构
+项目启动后，数据会持久化存储在本地的 `data` 目录中：
 
 ```text
 uploads/                  # 挂载的根目录
