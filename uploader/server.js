@@ -1,86 +1,95 @@
 const express = require('express');
 const multer = require('multer');
-const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 const app = express();
-app.use(cors()); // 允许前端跨域
+app.use(cors());
 
-// === 配置项 ===
+// --- 配置项 ---
 const PORT = 3000;
-const UPLOAD_DIR = '/usr/share/uploads'; // 容器内的固定根路径
-const AUTH_TOKEN = "my-secret-password"; // 【重要】前端上传必须带这个Token
-// =============
+// 鉴权密码，请修改为你想要的密码
+const AUTH_TOKEN = "my-secret-password";
+// 上传根目录
+const UPLOAD_ROOT = "/usr/share/uploads";
 
-// 确保根目录存在
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-// --- 核心修改：自定义存储策略 ---
+// --- Multer 存储引擎配置 ---
 const storage = multer.diskStorage({
-  // 1. 动态定义目录：按 年/月/日 分类
-  destination: (req, file, cb) => {
+  destination: function (req, file, cb) {
+    // 1. 生成日期路径: 2023/10/27
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
-
-    // 组合路径：/usr/share/uploads/2023/10/27
-    const subDir = path.join(String(year), month, day);
-    const fullDir = path.join(UPLOAD_DIR, subDir);
-
-    // 检查并创建目录
-    if (!fs.existsSync(fullDir)) {
-      fs.mkdirSync(fullDir, { recursive: true });
-    }
-
-    cb(null, fullDir);
-  },
-  
-  // 2. 动态定义文件名：YYYYMMDD-HHmmss-随机码.后缀
-  filename: (req, file, cb) => {
-    const now = new Date();
-    // 格式化时间戳：20231027-143005
-    const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14); 
-    const random = Math.round(Math.random() * 1E5); // 5位随机数
-    const ext = path.extname(file.originalname);
     
-    cb(null, `${timestamp}-${random}${ext}`);
+    const relativePath = `${year}/${month}/${day}`;
+    const absolutePath = path.join(UPLOAD_ROOT, relativePath);
+
+    // 2. 递归创建目录
+    fs.mkdirSync(absolutePath, { recursive: true });
+
+    // 3. 将路径传递给 multer (注意：这里传的是绝对路径)
+    cb(null, absolutePath);
+  },
+  filename: function (req, file, cb) {
+    // 4. 生成唯一文件名: 时间戳-随机数.后缀
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    // 获取原始文件后缀 (例如 .jpg, .zip, .mp4)
+    const ext = path.extname(file.originalname); 
+    cb(null, uniqueSuffix + ext);
   }
 });
 
-const upload = multer({ storage: storage });
+// --- 初始化 Upload 中间件 ---
+// 关键修改：去掉了 fileFilter，现在允许所有文件类型
+const upload = multer({ 
+  storage: storage,
+  // 如果你想限制文件大小，可以在这里加 limits，例如限制 100MB
+  // limits: { fileSize: 100 * 1024 * 1024 } 
+});
 
-// 上传接口
-app.post('/upload', upload.single('file'), (req, res) => {
-  // 1. 安全验证
+// --- 鉴权中间件 ---
+const authMiddleware = (req, res, next) => {
   const token = req.headers['authorization'];
-  if (token !== `Bearer ${AUTH_TOKEN}`) {
-    return res.status(403).json({ error: '权限验证失败' });
+  if (token === `Bearer ${AUTH_TOKEN}`) {
+    next();
+  } else {
+    res.status(401).json({ message: 'Unauthorized' });
+  }
+};
+
+// --- 上传接口 ---
+app.post('/upload', authMiddleware, upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
   }
 
-  if (!req.file) return res.status(400).json({ error: '未接收到文件' });
-
-  // 2. 生成返回链接
-  // 计算相对路径：从 UPLOAD_DIR 到 实际保存路径
-  // 例如：req.file.path 是 /usr/share/uploads/2023/10/27/xxx.jpg
-  // relativePath 就是 2023/10/27/xxx.jpg
-  let relativePath = path.relative(UPLOAD_DIR, req.file.path);
+  // 构造返回给客户端的相对路径
+  // req.file.destination 是绝对路径，我们需要把它转回相对路径给前端
+  // 方法是：去掉 UPLOAD_ROOT 部分
+  let relativePath = req.file.path.replace(UPLOAD_ROOT, '');
   
-  // 确保 Windows/Linux 路径分隔符统一转为 URL 的 '/'
+  // 处理路径分隔符问题 (Windows/Linux兼容)
+  if (relativePath.startsWith(path.sep)) {
+    relativePath = relativePath.substring(1); 
+  }
+  // 统一转为 URL 的斜杠 /
   relativePath = relativePath.split(path.sep).join('/');
 
-  // 假设外部访问域名/IP 是 localhost (部署上线时这里通常需要改为你的域名或服务器IP)
-  const fileUrl = `http://localhost/${relativePath}`;
-  
-  console.log(`[Success] File uploaded to: ${relativePath}`);
-  
+  // 构造完整的 URL (假设 Nginx 在 80 端口运行)
+  const fullUrl = `http://localhost/${relativePath}`;
+
   res.json({
     message: 'success',
-    url: fileUrl,
-    filename: req.file.filename,
-    path: relativePath
+    url: fullUrl,
+    path: relativePath,
+    originalName: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size
   });
 });
 
-app.listen(PORT, () => console.log(`Uploader running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Uploader service running on port ${PORT}`);
+});

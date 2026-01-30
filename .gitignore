@@ -6,7 +6,7 @@ node_modules/
 Thumbs.db
 
 # 你的上传目录（本地测试图片不要传上去）
-uploads/
+data/
 
 # 环境变量（如果有敏感信息）
 .env
